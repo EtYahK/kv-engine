@@ -7,6 +7,7 @@
 namespace minikv {
 
 class Storage;
+class CommandParser;
 
 // Basic TCP server: accepts connections and reads commands.
 class TcpServer {

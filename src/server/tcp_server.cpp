@@ -1,4 +1,5 @@
 #include "server/tcp_server.h"
+#include "parser/parser.h"
 #include "storage/storage.h"
 
 #include <cstring>
@@ -141,11 +142,15 @@ void TcpServer::stop() {
 }
 
 void TcpServer::handle_client(int client_fd) {
-    std::string line;
+    CommandParser parser(storage_);
+    std::string   line;
+    std::string   response;
+
     while (read_line(client_fd, line)) {
         if (line.empty()) continue;
-        std::string response = "+OK\r\n";
+        bool keep = parser.handle_line(line, response);
         if (!write_all(client_fd, response)) break;
+        if (!keep) break;
     }
     CLOSESOCK(client_fd);
 }
