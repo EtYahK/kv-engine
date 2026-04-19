@@ -1,4 +1,5 @@
 #include "server/tcp_server.h"
+#include "concurrency/thread_pool.h"
 #include "parser/parser.h"
 #include "storage/storage.h"
 
@@ -72,7 +73,8 @@ bool write_all(int fd, const std::string& data) {
 
 }
 
-TcpServer::TcpServer(Storage& storage) : storage_(storage) {}
+TcpServer::TcpServer(Storage& storage, ThreadPool& pool)
+    : storage_(storage), pool_(pool) {}
 
 TcpServer::~TcpServer() {
     stop();
@@ -123,7 +125,8 @@ int TcpServer::run(const std::string& host, uint16_t port) {
             if (!running_.load()) break;
             continue;
         }
-        handle_client(client_fd);
+        bool ok = pool_.submit([this, client_fd] { handle_client(client_fd); });
+        if (!ok) CLOSESOCK(client_fd);
     }
 
     if (listen_fd_ != INVALID_SOCKET) {
