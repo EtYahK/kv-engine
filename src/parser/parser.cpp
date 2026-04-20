@@ -1,5 +1,6 @@
 #include "parser/parser.h"
 #include "storage/storage.h"
+#include "utils/aof.h"
 
 #include <algorithm>
 #include <cctype>
@@ -7,7 +8,8 @@
 
 namespace minikv {
 
-CommandParser::CommandParser(Storage& storage) : storage_(storage) {}
+CommandParser::CommandParser(Storage& storage, Aof* aof)
+    : storage_(storage), aof_(aof) {}
 
 std::vector<std::string> CommandParser::tokenize(const std::string& line) {
     std::vector<std::string> out;
@@ -31,7 +33,8 @@ static std::string bulk(const std::string& s) {
     return out;
 }
 
-bool CommandParser::handle_line(const std::string& line, std::string& out) {
+bool CommandParser::handle_line(const std::string& line,
+                                std::string& out) {
     auto tokens = tokenize(line);
     if (tokens.empty()) {
         out = "-ERR empty command\r\n";
@@ -52,11 +55,30 @@ bool CommandParser::handle_line(const std::string& line, std::string& out) {
         return true;
     }
     if (cmd == "SET") {
-        if (tokens.size() != 3) {
-            out = "-ERR usage: SET key value\r\n";
+        if (tokens.size() != 3 && tokens.size() != 5) {
+            out = "-ERR usage: SET key value [EX seconds]\r\n";
             return true;
         }
-        storage_.set(tokens[1], tokens[2]);
+        std::optional<std::chrono::seconds> ttl;
+        if (tokens.size() == 5) {
+            if (upper(tokens[3]) != "EX") {
+                out = "-ERR expected EX\r\n";
+                return true;
+            }
+            try {
+                long long secs = std::stoll(tokens[4]);
+                if (secs <= 0) {
+                    out = "-ERR EX must be > 0\r\n";
+                    return true;
+                }
+                ttl = std::chrono::seconds(secs);
+            } catch (...) {
+                out = "-ERR bad EX value\r\n";
+                return true;
+            }
+        }
+        storage_.set(tokens[1], tokens[2], ttl);
+        if (aof_) aof_->append(line);
         out = "+OK\r\n";
         return true;
     }
@@ -75,6 +97,7 @@ bool CommandParser::handle_line(const std::string& line, std::string& out) {
             return true;
         }
         bool removed = storage_.del(tokens[1]);
+        if (removed && aof_) aof_->append(line);
         out = std::string(":") + (removed ? "1" : "0") + "\r\n";
         return true;
     }
@@ -84,6 +107,14 @@ bool CommandParser::handle_line(const std::string& line, std::string& out) {
             return true;
         }
         out = std::string(":") + (storage_.exists(tokens[1]) ? "1" : "0") + "\r\n";
+        return true;
+    }
+    if (cmd == "TTL") {
+        if (tokens.size() != 2) {
+            out = "-ERR usage: TTL key\r\n";
+            return true;
+        }
+        out = ":" + std::to_string(storage_.ttl(tokens[1])) + "\r\n";
         return true;
     }
 
