@@ -2,7 +2,7 @@
 
 A in-memory key/value store written in C++17.
 
-Built to explore how systems like Redis work, mainly TCP networking, concurrency, and basic persistence.
+Built to explore how systems like Redis work, mainly TCP networking, concurrency, and persistence.
 
 ---
 
@@ -11,8 +11,8 @@ Built to explore how systems like Redis work, mainly TCP networking, concurrency
 - TCP server supporting multiple clients
 - Commands: SET / GET / DEL / EXISTS / TTL / PING / DBSIZE
 - Key expiration (TTL)
-- Simple AOF persistence (log replay on startup)
-- Basic benchmark tool
+- AOF persistence (log replay on startup)
+- Benchmark tool
 
 ---
 
@@ -48,7 +48,7 @@ PING
 - Uses shared_mutex for thread-safe access
 - Thread pool handles client requests
 - TTL uses lazy + background cleanup
-- AOF is append-only (simple replay on startup)
+- AOF is append-only (replay on startup)
 
 ---
 
